@@ -232,7 +232,7 @@ async function runPipeline(agent, userText, ttsClient, send) {
     params: agent.emotionToParams(llmResult.emotion, llmResult.intensity),
   });
 
-  agent.saveMemory(userText, llmResult.response);
+  agent.saveMemory(userText, llmResult);
 }
 
 const PORT = parseInt(process.env.PORT || '3001', 10);

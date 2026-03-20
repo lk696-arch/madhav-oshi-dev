@@ -75,8 +75,15 @@ export class VTuberAgent {
     return emotionToLive2DParams(emotion, intensity);
   }
 
-  saveMemory(userText, assistantText) {
-    this.memory.addTurn(userText, assistantText);
+  saveMemory(userText, llmResult) {
+    // Store assistant turn as JSON so history matches Claude's expected output format.
+    // Passing plain text causes Claude to see format inconsistency in later turns.
+    const assistantContent = JSON.stringify({
+      response: llmResult.response,
+      emotion: llmResult.emotion,
+      intensity: llmResult.intensity,
+    });
+    this.memory.addTurn(userText, assistantContent);
   }
 
   cleanup() {

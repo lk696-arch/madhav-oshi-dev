@@ -84,11 +84,11 @@ class ResponseFieldExtractor {
   process(chunk) {
     if (this.state === 'BEFORE') {
       this._rawBuffer += chunk;
-      const MARKER = '"response": "';
-      const idx = this._rawBuffer.indexOf(MARKER);
-      if (idx === -1) return [];
+      // Match "response": " or "response":" (with or without space after colon)
+      const match = this._rawBuffer.match(/"response"\s*:\s*"/);
+      if (!match) return [];
       this.state = 'INSIDE';
-      const afterMarker = this._rawBuffer.slice(idx + MARKER.length);
+      const afterMarker = this._rawBuffer.slice(match.index + match[0].length);
       this._rawBuffer = '';
       return afterMarker ? this._processInside(afterMarker) : [];
     }
