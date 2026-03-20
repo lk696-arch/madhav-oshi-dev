@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment variables — never commit API keys
+.env
+.env.local
+.env.production
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+
+# Expo / React Native
+.expo/
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/settings.json

@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Oshi AI VTuber",
+    "slug": "vtube-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0d0d14",
+    "splash": {
+      "backgroundColor": "#0d0d14"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.oshi.vtuber",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Oshi needs microphone access to hear you during voice chat.",
+        "NSSpeechRecognitionUsageDescription": "Oshi uses speech recognition to understand what you say."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0d0d14"
+      },
+      "package": "com.oshi.vtuber",
+      "permissions": [
+        "RECORD_AUDIO",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Oshi needs microphone access for voice chat."
+        }
+      ]
+    ]
+  }
+}

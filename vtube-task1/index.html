@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oshi — AI VTuber · Task 1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">✦ Oshi</div>
+    <div id="status-pill" class="pill idle">● Ready</div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Avatar side -->
+    <section id="avatar-section">
+      <div id="avatar-wrapper">
+        <canvas id="avatar-canvas" width="420" height="480"></canvas>
+        <div id="emotion-tag">😊 happy</div>
+      </div>
+      <div id="speech-bubble" hidden>
+        <p id="speech-text"></p>
+      </div>
+    </section>
+
+    <!-- Chat side -->
+    <section id="chat-section">
+
+      <div id="chat-log">
+        <div class="msg oshi">
+          <span class="name">Oshi</span>
+          <div class="bubble">Heyyy~ Welcome! I'm Oshi, your AI VTuber! Ask me anything or just say hi! ✨</div>
+        </div>
+      </div>
+
+      <div id="input-area">
+        <input
+          id="user-input"
+          type="text"
+          placeholder="Say something to Oshi…"
+          autocomplete="off"
+        />
+        <button id="send-btn">Send</button>
+        <button id="voice-btn" title="Toggle voice">🔊</button>
+      </div>
+
+      <div id="quick-btns">
+        <button class="quick" data-text="Tell me about yourself">About you</button>
+        <button class="quick" data-text="What are your hobbies?">Hobbies</button>
+        <button class="quick" data-text="Say something cute">Cute!</button>
+        <button class="quick" data-text="Tell me a joke">Joke</button>
+        <button class="quick" data-text="What games do you like?">Games</button>
+        <button class="quick" data-text="Sing something">Sing!</button>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="js/avatar.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/voice.js"></script>
+
+</body>
+</html>

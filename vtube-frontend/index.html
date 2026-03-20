@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oshi — AI VTuber POC</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── Status bar ──────────────────────────────────────────────────────────── -->
+  <div id="status-bar">
+    <span id="connection-status" class="status-dot disconnected"></span>
+    <span id="status-text">Connecting...</span>
+    <span id="session-id"></span>
+  </div>
+
+  <!-- ── Main layout ─────────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Avatar panel -->
+    <section id="avatar-panel">
+      <!--
+        Live2D canvas — the Live2D Cubism Web SDK renders here via WebGL.
+        Setup:
+          1. Download Live2D Cubism SDK for Web from https://www.live2d.com/en/sdk/about/
+          2. Place CubismSdkForWeb/Core/live2dcubismcore.min.js in frontend/lib/
+          3. Load your .model3.json file by updating LIVE2D_MODEL_PATH in live2dManager.js
+          4. Uncomment the SDK script tag below
+
+        For the POC demo without a model, the canvas shows a placeholder animation.
+      -->
+      <canvas id="live2d-canvas" width="600" height="600"></canvas>
+
+      <!-- Emotion badge — shows current expression state -->
+      <div id="emotion-badge">
+        <span id="emotion-label">neutral</span>
+        <div id="emotion-bar">
+          <div id="emotion-fill"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chat + controls panel -->
+    <section id="chat-panel">
+
+      <!-- Transcript display -->
+      <div id="transcript-box">
+        <div id="transcript-log"></div>
+      </div>
+
+      <!-- Voice controls -->
+      <div id="voice-controls">
+        <button id="mic-btn" class="mic-idle" disabled>
+          <svg id="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <span id="mic-label">Hold to Talk</span>
+        </button>
+
+        <!-- Audio visualizer bars -->
+        <div id="audio-viz">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- Text input fallback (useful for testing without mic) -->
+      <div id="text-input-area">
+        <input
+          type="text"
+          id="text-input"
+          placeholder="Type a message..."
+          autocomplete="off"
+          disabled
+        />
+        <button id="send-btn" disabled>Send</button>
+      </div>
+
+      <!-- Response display -->
+      <div id="response-box">
+        <div id="response-text"></div>
+        <div id="thinking-indicator" hidden>
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Backend URL config — edit js/config.js to point to your Railway backend -->
+  <script src="js/config.js"></script>
+  <!-- App modules -->
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>
