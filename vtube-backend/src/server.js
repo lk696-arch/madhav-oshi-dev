@@ -48,6 +48,30 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.post('/api/chat', async (req, res) => {
+  const { text, sessionId } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
+
+  const agent = new VTuberAgent(sessionId || 'rest-session');
+
+  const inputCheck = await agent.checkInput(text);
+  if (!inputCheck.safe) return res.status(400).json({ error: inputCheck.reason });
+
+  const noopTTS = { sendTokens: () => {}, interrupt: () => {} };
+  const llmResult = await agent.thinkAndSpeak(text, noopTTS, null);
+
+  const outputCheck = await agent.checkOutput(llmResult.response);
+  if (!outputCheck.safe) return res.status(400).json({ error: 'Response blocked by safety filter' });
+
+  agent.saveMemory(text, llmResult);
+
+  res.json({
+    text: llmResult.response,
+    emotion: llmResult.emotion,
+    intensity: llmResult.intensity,
+  });
+});
+
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
