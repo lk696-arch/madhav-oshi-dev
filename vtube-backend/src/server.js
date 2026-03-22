@@ -40,7 +40,7 @@ import { TTSStreamClient } from './voice/ttsStreamClient.js';
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: (process.env.CORS_ORIGIN || 'http://localhost:5500').split(','),
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
   methods: ['GET', 'POST'],
 }));
 
