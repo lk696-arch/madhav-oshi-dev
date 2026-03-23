@@ -49,21 +49,22 @@ app.get('/health', (_req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { text, sessionId } = req.body;
-  if (!text?.trim()) return res.status(400).json({ error: 'text is required' });
+  const { text, message, prompt, messages, sessionId } = req.body;
+  const userText = (text || message || prompt || messages?.[messages.length - 1]?.content)?.trim();
+  if (!userText) return res.status(400).json({ error: 'text is required' });
 
   const agent = new VTuberAgent(sessionId || 'rest-session');
 
-  const inputCheck = await agent.checkInput(text);
+  const inputCheck = await agent.checkInput(userText);
   if (!inputCheck.safe) return res.status(400).json({ error: inputCheck.reason });
 
   const noopTTS = { sendTokens: () => {}, interrupt: () => {} };
-  const llmResult = await agent.thinkAndSpeak(text, noopTTS, null);
+  const llmResult = await agent.thinkAndSpeak(userText, noopTTS, null);
 
   const outputCheck = await agent.checkOutput(llmResult.response);
   if (!outputCheck.safe) return res.status(400).json({ error: 'Response blocked by safety filter' });
 
-  agent.saveMemory(text, llmResult);
+  agent.saveMemory(userText, llmResult);
 
   res.json({
     text: llmResult.response,
