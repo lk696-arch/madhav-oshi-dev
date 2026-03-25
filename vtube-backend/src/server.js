@@ -36,6 +36,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { VTuberAgent } from './agents/vtuberAgent.js';
 import { DeepgramSTT } from './voice/deepgram.js';
 import { TTSStreamClient } from './voice/ttsStreamClient.js';
+import { sessionOpen, onMessage } from './genki/genkiEngine.js';
 
 const app = express();
 app.use(express.json());
@@ -48,8 +49,15 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.post('/api/session-open', (req, res) => {
+  const { userId } = req.body;
+  if (!userId?.trim()) return res.status(400).json({ error: 'userId is required' });
+  const result = sessionOpen(userId.trim());
+  res.json(result);
+});
+
 app.post('/api/chat', async (req, res) => {
-  const { text, message, prompt, messages, sessionId } = req.body;
+  const { text, message, prompt, messages, sessionId, userId, sessionMsgCount } = req.body;
   const userText = (text || message || prompt || messages?.[messages.length - 1]?.content)?.trim();
   if (!userText) return res.status(400).json({ error: 'text is required' });
 
@@ -65,6 +73,9 @@ app.post('/api/chat', async (req, res) => {
   if (!outputCheck.safe) return res.status(400).json({ error: 'Response blocked by safety filter' });
 
   agent.saveMemory(userText, llmResult);
+
+  // Genki: +2 per message (capped at +10/session)
+  if (userId) onMessage(userId, sessionMsgCount ?? 0);
 
   res.json({
     text: llmResult.response,
