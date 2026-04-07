@@ -37,6 +37,10 @@ import { VTuberAgent } from './agents/vtuberAgent.js';
 import { DeepgramSTT } from './voice/deepgram.js';
 import { TTSStreamClient } from './voice/ttsStreamClient.js';
 import { sessionOpen, onMessage } from './genki/genkiEngine.js';
+import { getBalance, creditCoins, deductCoins, hasProcessedPayment, recordGift } from './shop/shopStore.js';
+import { getGift, GIFT_CATALOGUE } from './shop/giftCatalogue.js';
+import { COIN_BUNDLES, getBundleByPriceId } from './shop/coinBundles.js';
+import Stripe from 'stripe';
 
 const app = express();
 app.use(express.json());
@@ -81,6 +85,113 @@ app.post('/api/chat', async (req, res) => {
     text: llmResult.response,
     emotion: llmResult.emotion,
     intensity: llmResult.intensity,
+  });
+});
+
+// ── Stripe setup ─────────────────────────────────────────────────────────────
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+// GET /api/shop/catalogue — all active gift items
+app.get('/api/shop/catalogue', (_req, res) => {
+  res.json({ gifts: GIFT_CATALOGUE, bundles: COIN_BUNDLES });
+});
+
+// GET /api/shop/balance/:userId — current Hoshi Coin balance
+app.get('/api/shop/balance/:userId', (req, res) => {
+  const balance = getBalance(req.params.userId);
+  res.json({ userId: req.params.userId, hoshi_balance: balance });
+});
+
+// POST /api/coins/checkout — create Stripe Checkout Session
+app.post('/api/coins/checkout', async (req, res) => {
+  const { userId, bundleId, successUrl, cancelUrl } = req.body;
+  if (!userId?.trim()) return res.status(400).json({ error: 'userId is required' });
+  if (!bundleId) return res.status(400).json({ error: 'bundleId is required' });
+
+  const bundle = COIN_BUNDLES.find(b => b.id === bundleId);
+  if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(503).json({ error: 'Stripe not configured — add STRIPE_SECRET_KEY to env' });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [{ price: bundle.price_id, quantity: 1 }],
+    metadata: { userId: userId.trim(), bundleId: bundle.id, coins: bundle.coins },
+    success_url: successUrl || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=success`,
+    cancel_url:  cancelUrl  || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=cancelled`,
+  });
+
+  res.json({ checkout_url: session.url, session_id: session.id });
+});
+
+// POST /api/coins/webhook — Stripe webhook: credit coins after payment
+app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'Webhook secret not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[Stripe] Webhook signature failed:', err.message);
+    return res.status(400).json({ error: `Webhook error: ${err.message}` });
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const { userId, coins } = session.metadata;
+    const paymentId = session.payment_intent;
+
+    // Idempotency — never double-credit
+    if (hasProcessedPayment(paymentId)) {
+      console.log(`[Stripe] Duplicate webhook ignored: ${paymentId}`);
+      return res.json({ received: true });
+    }
+
+    const newBalance = creditCoins(userId, parseInt(coins), paymentId);
+    console.log(`[Shop] Credited ${coins} Hoshi Coins to ${userId} — new balance: ${newBalance}`);
+  }
+
+  res.json({ received: true });
+});
+
+// POST /api/gifts/send — spend coins, apply genki boost, record gift
+app.post('/api/gifts/send', async (req, res) => {
+  const { userId, giftId } = req.body;
+  if (!userId?.trim()) return res.status(400).json({ error: 'userId is required' });
+  if (!giftId) return res.status(400).json({ error: 'giftId is required' });
+
+  const gift = getGift(giftId);
+  if (!gift) return res.status(404).json({ error: 'Gift not found' });
+
+  const deducted = deductCoins(userId.trim(), gift.coin_cost, giftId);
+  if (!deducted) {
+    return res.status(402).json({
+      error: 'Insufficient Hoshi Coins',
+      required: gift.coin_cost,
+      balance: getBalance(userId.trim()),
+    });
+  }
+
+  recordGift(userId.trim(), giftId, gift.duration_days);
+
+  // Apply genki boost if applicable
+  if (gift.genki_boost > 0) {
+    try {
+      const { applyBoost } = await import('./genki/genkiEngine.js');
+      applyBoost(userId.trim(), gift.genki_boost);
+    } catch (_) { /* genki engine is optional */ }
+  }
+
+  res.json({
+    success: true,
+    gift: { id: gift.id, name: gift.name, name_jp: gift.name_jp, category: gift.category },
+    genki_boost: gift.genki_boost,
+    new_balance: getBalance(userId.trim()),
   });
 });
 
