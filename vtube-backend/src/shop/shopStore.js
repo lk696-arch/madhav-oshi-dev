@@ -28,6 +28,16 @@ function save(name, data) {
   writeFileSync(filePath(name), JSON.stringify(data, null, 2));
 }
 
+// Simple in-process mutex — prevents concurrent read→check→write races
+// on /api/gifts/send and webhook idempotency paths.
+const locks = new Map();
+async function withLock(key, fn) {
+  while (locks.get(key)) await locks.get(key);
+  let resolve;
+  locks.set(key, new Promise(r => { resolve = r; }));
+  try { return await fn(); } finally { locks.delete(key); resolve(); }
+}
+
 // ── Users ────────────────────────────────────────────────────────────────────
 
 export function getOrCreateUser(userId) {
@@ -64,26 +74,28 @@ export function creditCoins(userId, amount, stripePaymentId) {
   return user.hoshi_balance;
 }
 
-export function deductCoins(userId, amount, giftId) {
-  const users = load('shop_users');
-  const user = users[userId];
-  if (!user || user.hoshi_balance < amount) return false;
-  user.hoshi_balance -= amount;
-  users[userId] = user;
-  save('shop_users', users);
+export async function deductCoins(userId, amount, giftId) {
+  return withLock(`user:${userId}`, () => {
+    const users = load('shop_users');
+    const user = users[userId];
+    if (!user || user.hoshi_balance < amount) return false;
+    user.hoshi_balance -= amount;
+    users[userId] = user;
+    save('shop_users', users);
 
-  const txns = load('coin_transactions');
-  txns.push({
-    id: uuidv4(),
-    user_id: userId,
-    type: 'spend',
-    amount: -amount,
-    stripe_payment_id: null,
-    gift_id: giftId,
-    created_at: new Date().toISOString(),
+    const txns = load('coin_transactions');
+    txns.push({
+      id: uuidv4(),
+      user_id: userId,
+      type: 'spend',
+      amount: -amount,
+      stripe_payment_id: null,
+      gift_id: giftId,
+      created_at: new Date().toISOString(),
+    });
+    save('coin_transactions', txns);
+    return true;
   });
-  save('coin_transactions', txns);
-  return true;
 }
 
 // ── Idempotency ───────────────────────────────────────────────────────────────

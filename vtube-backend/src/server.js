@@ -43,6 +43,44 @@ import { COIN_BUNDLES, getBundleByPriceId } from './shop/coinBundles.js';
 import Stripe from 'stripe';
 
 const app = express();
+
+// ── Stripe webhook MUST be registered before express.json() ──────────────────
+// express.raw() captures the raw body Stripe needs to verify signatures.
+// If express.json() runs first, req.body is already parsed and constructEvent() throws.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'Webhook secret not configured' });
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[Stripe] Webhook signature failed:', err.message);
+    return res.status(400).json({ error: `Webhook error: ${err.message}` });
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const { userId, coins } = session.metadata;
+    const paymentId = session.payment_intent;
+
+    // Idempotency — never double-credit
+    if (hasProcessedPayment(paymentId)) {
+      console.log(`[Stripe] Duplicate webhook ignored: ${paymentId}`);
+      return res.json({ received: true });
+    }
+
+    const newBalance = creditCoins(userId, parseInt(coins), paymentId);
+    console.log(`[Shop] Credited ${coins} Hoshi Coins to ${userId} — new balance: ${newBalance}`);
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 app.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
@@ -88,9 +126,6 @@ app.post('/api/chat', async (req, res) => {
   });
 });
 
-// ── Stripe setup ─────────────────────────────────────────────────────────────
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
-
 // GET /api/shop/catalogue — all active gift items
 app.get('/api/shop/catalogue', (_req, res) => {
   res.json({ gifts: GIFT_CATALOGUE, bundles: COIN_BUNDLES });
@@ -110,6 +145,7 @@ app.post('/api/coins/checkout', async (req, res) => {
 
   const bundle = COIN_BUNDLES.find(b => b.id === bundleId);
   if (!bundle) return res.status(404).json({ error: 'Bundle not found' });
+  if (!bundle.price_id) return res.status(503).json({ error: 'Bundle not yet available — Stripe price ID pending' });
 
   if (!process.env.STRIPE_SECRET_KEY) {
     return res.status(503).json({ error: 'Stripe not configured — add STRIPE_SECRET_KEY to env' });
@@ -124,39 +160,6 @@ app.post('/api/coins/checkout', async (req, res) => {
   });
 
   res.json({ checkout_url: session.url, session_id: session.id });
-});
-
-// POST /api/coins/webhook — Stripe webhook: credit coins after payment
-app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    return res.status(503).json({ error: 'Webhook secret not configured' });
-  }
-
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('[Stripe] Webhook signature failed:', err.message);
-    return res.status(400).json({ error: `Webhook error: ${err.message}` });
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const { userId, coins } = session.metadata;
-    const paymentId = session.payment_intent;
-
-    // Idempotency — never double-credit
-    if (hasProcessedPayment(paymentId)) {
-      console.log(`[Stripe] Duplicate webhook ignored: ${paymentId}`);
-      return res.json({ received: true });
-    }
-
-    const newBalance = creditCoins(userId, parseInt(coins), paymentId);
-    console.log(`[Shop] Credited ${coins} Hoshi Coins to ${userId} — new balance: ${newBalance}`);
-  }
-
-  res.json({ received: true });
 });
 
 // POST /api/gifts/send — spend coins, apply genki boost, record gift
