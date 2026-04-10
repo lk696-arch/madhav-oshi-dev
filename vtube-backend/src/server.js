@@ -126,6 +126,10 @@ app.post('/api/chat', async (req, res) => {
   });
 });
 
+// Return JSON for wrong-method calls on known routes
+app.get('/api/coins/checkout', (_req, res) => res.status(405).json({ error: 'Use POST /api/coins/checkout' }));
+app.get('/api/gifts/send', (_req, res) => res.status(405).json({ error: 'Use POST /api/gifts/send' }));
+
 // GET /api/shop/catalogue — all active gift items
 app.get('/api/shop/catalogue', (_req, res) => {
   res.json({ gifts: GIFT_CATALOGUE, bundles: COIN_BUNDLES });
