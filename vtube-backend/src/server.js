@@ -175,7 +175,7 @@ app.post('/api/gifts/send', async (req, res) => {
   const gift = getGift(giftId);
   if (!gift) return res.status(404).json({ error: 'Gift not found' });
 
-  const deducted = deductCoins(userId.trim(), gift.coin_cost, giftId);
+  const deducted = await deductCoins(userId.trim(), gift.coin_cost, giftId);
   if (!deducted) {
     return res.status(402).json({
       error: 'Insufficient Hoshi Coins',
