@@ -9,8 +9,8 @@ export const COIN_BUNDLES = [
   { id: 'otanoshimi',    name: 'Otanoshimi',    coins: 100,  price_usd: 0.99,  price_id: 'price_1TJZx0KDO6vyNeNrYmpc8RVb' },
   { id: 'otsukare',      name: 'Otsukare',      coins: 500,  price_usd: 4.99,  price_id: 'price_1TJZyrKDO6vyNeNrQ92kgTIq' },
   { id: 'daisuki',       name: 'Daisuki ★',     coins: 1200, price_usd: 9.99,  price_id: 'price_1TJZzEKDO6vyNeNr3AVXtv6B' },
-  { id: 'oshi_forever',  name: 'Oshi Forever',  coins: 2800, price_usd: 19.99, price_id: null },
-  { id: 'ichiban',       name: 'Ichiban',        coins: 6500, price_usd: 39.99, price_id: null },
+  { id: 'oshi_forever',  name: 'Oshi Forever',  coins: 2800, price_usd: 19.99, price_id: 'price_1TMlITKDO6vyNeNrZSuDod8o' },
+  { id: 'ichiban',       name: 'Ichiban',        coins: 6500, price_usd: 39.99, price_id: 'price_1TMlIuKDO6vyNeNrm5ifdIe9' },
 ];
 
 export function getBundleByPriceId(priceId) {
