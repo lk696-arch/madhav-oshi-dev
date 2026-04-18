@@ -10,10 +10,10 @@
 // Live-mode price IDs with a test-mode key cause Stripe to reject + crash.
 export const COIN_BUNDLES = [
   { id: 'otanoshimi',    name: 'Otanoshimi',    coins: 100,  price_usd: 0.99,  price_id: null },
-  { id: 'otsukare',      name: 'Otsukare',      coins: 500,  price_usd: 4.99,  price_id: null },
-  { id: 'daisuki',       name: 'Daisuki ★',     coins: 1200, price_usd: 9.99,  price_id: null },
-  { id: 'oshi_forever',  name: 'Oshi Forever',  coins: 2800, price_usd: 19.99, price_id: null },
-  { id: 'ichiban',       name: 'Ichiban',        coins: 6500, price_usd: 39.99, price_id: null },
+  { id: 'otsukare',      name: 'Otsukare',      coins: 500,  price_usd: 4.99,  price_id: 'price_1TNXEGKEDtfXbisvAHNhAsdj' },
+  { id: 'daisuki',       name: 'Daisuki ★',     coins: 1200, price_usd: 9.99,  price_id: 'price_1TNXEUKEDtfXbisvU09Lvmol' },
+  { id: 'oshi_forever',  name: 'Oshi Forever',  coins: 2800, price_usd: 19.99, price_id: 'price_1TNXEnKEDtfXbisvLeudY7TN' },
+  { id: 'ichiban',       name: 'Ichiban',        coins: 6500, price_usd: 39.99, price_id: 'price_1TNXF5KEDtfXbisvPUHkNE2P' },
 ];
 
 export function getBundleByPriceId(priceId) {
