@@ -155,13 +155,19 @@ app.post('/api/coins/checkout', async (req, res) => {
     return res.status(503).json({ error: 'Stripe not configured — add STRIPE_SECRET_KEY to env' });
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    line_items: [{ price: bundle.price_id, quantity: 1 }],
-    metadata: { userId: userId.trim(), bundleId: bundle.id, coins: bundle.coins },
-    success_url: successUrl || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=success`,
-    cancel_url:  cancelUrl  || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=cancelled`,
-  });
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{ price: bundle.price_id, quantity: 1 }],
+      metadata: { userId: userId.trim(), bundleId: bundle.id, coins: bundle.coins },
+      success_url: successUrl || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=success`,
+      cancel_url:  cancelUrl  || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=cancelled`,
+    });
+  } catch (err) {
+    console.error('[Stripe] Checkout session error:', err.message);
+    return res.status(502).json({ error: 'Stripe error', detail: err.message });
+  }
 
   res.json({ checkout_url: session.url, session_id: session.id });
 });
