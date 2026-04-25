@@ -161,8 +161,8 @@ app.post('/api/coins/checkout', async (req, res) => {
       mode: 'payment',
       line_items: [{ price: bundle.price_id, quantity: 1 }],
       metadata: { userId: userId.trim(), bundleId: bundle.id, coins: bundle.coins },
-      success_url: successUrl || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=success`,
-      cancel_url:  cancelUrl  || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/shop?payment=cancelled`,
+      success_url: successUrl || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/vtuber/shop?payment=success`,
+      cancel_url:  cancelUrl  || `${process.env.APP_URL || 'https://oshiweb.vercel.app'}/vtuber/shop?payment=cancelled`,
     });
   } catch (err) {
     console.error('[Stripe] Checkout session error:', err.message);
