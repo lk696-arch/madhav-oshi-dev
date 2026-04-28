@@ -1,125 +1,109 @@
 /**
- * shopStore.js — File-based persistence for Hoshi Coins & gift transactions
+ * shopStore.js — Supabase-backed persistence for Hoshi Coins & gift transactions
  *
- * Stores:
- *   users:            { [userId]: { hoshi_balance, created_at } }
- *   coin_transactions: [ { id, user_id, type, amount, stripe_payment_id, gift_id, created_at } ]
- *   user_gifts:        [ { id, user_id, gift_id, gifted_at, expires_at, is_equipped } ]
+ * Falls back to in-memory store if SUPABASE_URL / SUPABASE_ANON_KEY are not set
+ * (useful for local dev without a DB).
+ *
+ * Supabase tables required (run migration SQL in supabase/migrations/001_shop.sql):
+ *   shop_users        (user_id TEXT PK, hoshi_balance INT, created_at TIMESTAMPTZ)
+ *   coin_transactions (id UUID PK, user_id TEXT, type TEXT, amount INT,
+ *                      stripe_payment_id TEXT, gift_id TEXT, created_at TIMESTAMPTZ)
+ *   user_gifts        (id UUID PK, user_id TEXT, gift_id TEXT, gifted_at TIMESTAMPTZ,
+ *                      expires_at TIMESTAMPTZ, is_equipped BOOL)
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '../../data');
+const USE_SUPABASE = !!(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY);
 
-function filePath(name) { return join(DATA_DIR, `${name}.json`); }
+const supabase = USE_SUPABASE
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+  : null;
 
-function load(name) {
-  const fp = filePath(name);
-  if (!existsSync(fp)) return name === 'coin_transactions' || name === 'user_gifts' ? [] : {};
-  return JSON.parse(readFileSync(fp, 'utf8'));
+if (!USE_SUPABASE) {
+  console.warn('[Shop] SUPABASE_URL/ANON_KEY not set — using in-memory store (balances reset on restart)');
 }
 
-function save(name, data) {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(filePath(name), JSON.stringify(data, null, 2));
-}
+// ── In-memory fallback ────────────────────────────────────────────────────────
+const mem = { users: {}, transactions: [], gifts: [] };
 
-// Simple in-process mutex — prevents concurrent read→check→write races
-// on /api/gifts/send and webhook idempotency paths.
-const locks = new Map();
-async function withLock(key, fn) {
-  while (locks.get(key)) await locks.get(key);
-  let resolve;
-  locks.set(key, new Promise(r => { resolve = r; }));
-  try { return await fn(); } finally { locks.delete(key); resolve(); }
-}
+// ── Users ─────────────────────────────────────────────────────────────────────
 
-// ── Users ────────────────────────────────────────────────────────────────────
-
-export function getOrCreateUser(userId) {
-  const users = load('shop_users');
-  if (!users[userId]) {
-    users[userId] = { hoshi_balance: 0, created_at: new Date().toISOString() };
-    save('shop_users', users);
+export async function getOrCreateUser(userId) {
+  if (USE_SUPABASE) {
+    const { data } = await supabase.from('shop_users').select('*').eq('user_id', userId).single();
+    if (data) return data;
+    const { data: created } = await supabase.from('shop_users')
+      .insert({ user_id: userId, hoshi_balance: 0, created_at: new Date().toISOString() })
+      .select().single();
+    return created;
   }
-  return users[userId];
+  if (!mem.users[userId]) mem.users[userId] = { user_id: userId, hoshi_balance: 0 };
+  return mem.users[userId];
 }
 
-export function getBalance(userId) {
-  return getOrCreateUser(userId).hoshi_balance;
+export async function getBalance(userId) {
+  const user = await getOrCreateUser(userId);
+  return user?.hoshi_balance ?? 0;
 }
 
-export function creditCoins(userId, amount, stripePaymentId) {
-  const users = load('shop_users');
-  const user = users[userId] || { hoshi_balance: 0, created_at: new Date().toISOString() };
-  user.hoshi_balance += amount;
-  users[userId] = user;
-  save('shop_users', users);
+export async function creditCoins(userId, amount, stripePaymentId) {
+  await getOrCreateUser(userId);
 
-  const txns = load('coin_transactions');
-  txns.push({
-    id: uuidv4(),
-    user_id: userId,
-    type: 'purchase',
-    amount,
-    stripe_payment_id: stripePaymentId,
-    gift_id: null,
-    created_at: new Date().toISOString(),
-  });
-  save('coin_transactions', txns);
-  return user.hoshi_balance;
+  if (USE_SUPABASE) {
+    const { data: user } = await supabase.from('shop_users').select('hoshi_balance').eq('user_id', userId).single();
+    const newBalance = (user?.hoshi_balance ?? 0) + amount;
+    await supabase.from('shop_users').update({ hoshi_balance: newBalance }).eq('user_id', userId);
+    await supabase.from('coin_transactions').insert({
+      id: uuidv4(), user_id: userId, type: 'purchase', amount,
+      stripe_payment_id: stripePaymentId, gift_id: null, created_at: new Date().toISOString(),
+    });
+    return newBalance;
+  }
+
+  mem.users[userId].hoshi_balance += amount;
+  mem.transactions.push({ id: uuidv4(), user_id: userId, type: 'purchase', amount, stripe_payment_id: stripePaymentId });
+  return mem.users[userId].hoshi_balance;
 }
 
 export async function deductCoins(userId, amount, giftId) {
-  return withLock(`user:${userId}`, () => {
-    const users = load('shop_users');
-    const user = users[userId];
-    if (!user || user.hoshi_balance < amount) return false;
-    user.hoshi_balance -= amount;
-    users[userId] = user;
-    save('shop_users', users);
+  const user = await getOrCreateUser(userId);
+  if (!user || user.hoshi_balance < amount) return false;
 
-    const txns = load('coin_transactions');
-    txns.push({
-      id: uuidv4(),
-      user_id: userId,
-      type: 'spend',
-      amount: -amount,
-      stripe_payment_id: null,
-      gift_id: giftId,
-      created_at: new Date().toISOString(),
+  if (USE_SUPABASE) {
+    const newBalance = user.hoshi_balance - amount;
+    const { error } = await supabase.from('shop_users').update({ hoshi_balance: newBalance }).eq('user_id', userId);
+    if (error) return false;
+    await supabase.from('coin_transactions').insert({
+      id: uuidv4(), user_id: userId, type: 'spend', amount: -amount,
+      stripe_payment_id: null, gift_id: giftId, created_at: new Date().toISOString(),
     });
-    save('coin_transactions', txns);
     return true;
-  });
+  }
+
+  mem.users[userId].hoshi_balance -= amount;
+  mem.transactions.push({ id: uuidv4(), user_id: userId, type: 'spend', amount: -amount, gift_id: giftId });
+  return true;
 }
 
-// ── Idempotency ───────────────────────────────────────────────────────────────
-
-export function hasProcessedPayment(stripePaymentId) {
-  const txns = load('coin_transactions');
-  return txns.some(t => t.stripe_payment_id === stripePaymentId);
+export async function hasProcessedPayment(stripePaymentId) {
+  if (USE_SUPABASE) {
+    const { data } = await supabase.from('coin_transactions')
+      .select('id').eq('stripe_payment_id', stripePaymentId).limit(1);
+    return data?.length > 0;
+  }
+  return mem.transactions.some(t => t.stripe_payment_id === stripePaymentId);
 }
 
-// ── User gifts ────────────────────────────────────────────────────────────────
-
-export function recordGift(userId, giftId, durationDays) {
-  const gifts = load('user_gifts');
+export async function recordGift(userId, giftId, durationDays) {
   const now = new Date();
-  const expiresAt = durationDays
-    ? new Date(now.getTime() + durationDays * 86400000).toISOString()
-    : null;
-  gifts.push({
-    id: uuidv4(),
-    user_id: userId,
-    gift_id: giftId,
-    gifted_at: now.toISOString(),
-    expires_at: expiresAt,
-    is_equipped: false,
-  });
-  save('user_gifts', gifts);
+  const expiresAt = durationDays ? new Date(now.getTime() + durationDays * 86400000).toISOString() : null;
+  const entry = { id: uuidv4(), user_id: userId, gift_id: giftId, gifted_at: now.toISOString(), expires_at: expiresAt, is_equipped: false };
+
+  if (USE_SUPABASE) {
+    await supabase.from('user_gifts').insert(entry);
+    return;
+  }
+  mem.gifts.push(entry);
 }
