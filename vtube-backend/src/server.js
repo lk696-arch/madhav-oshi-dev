@@ -136,8 +136,8 @@ app.get('/api/shop/catalogue', (_req, res) => {
 });
 
 // GET /api/shop/balance/:userId — current Hoshi Coin balance
-app.get('/api/shop/balance/:userId', (req, res) => {
-  const balance = getBalance(req.params.userId);
+app.get('/api/shop/balance/:userId', async (req, res) => {
+  const balance = await getBalance(req.params.userId);
   res.json({ userId: req.params.userId, hoshi_balance: balance });
 });
 
@@ -186,11 +186,11 @@ app.post('/api/gifts/send', async (req, res) => {
     return res.status(402).json({
       error: 'Insufficient Hoshi Coins',
       required: gift.coin_cost,
-      balance: getBalance(userId.trim()),
+      balance: await getBalance(userId.trim()),
     });
   }
 
-  recordGift(userId.trim(), giftId, gift.duration_days);
+  await recordGift(userId.trim(), giftId, gift.duration_days);
 
   // Apply genki boost if applicable
   if (gift.genki_boost > 0) {
@@ -204,7 +204,7 @@ app.post('/api/gifts/send', async (req, res) => {
     success: true,
     gift: { id: gift.id, name: gift.name, name_jp: gift.name_jp, category: gift.category },
     genki_boost: gift.genki_boost,
-    new_balance: getBalance(userId.trim()),
+    new_balance: await getBalance(userId.trim()),
   });
 });
 
