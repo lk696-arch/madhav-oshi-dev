@@ -49,7 +49,7 @@ const app = express();
 // If express.json() runs first, req.body is already parsed and constructEvent() throws.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
 
-app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     return res.status(503).json({ error: 'Webhook secret not configured' });
@@ -69,12 +69,12 @@ app.post('/api/coins/webhook', express.raw({ type: 'application/json' }), (req, 
     const paymentId = session.payment_intent;
 
     // Idempotency — never double-credit
-    if (hasProcessedPayment(paymentId)) {
+    if (await hasProcessedPayment(paymentId)) {
       console.log(`[Stripe] Duplicate webhook ignored: ${paymentId}`);
       return res.json({ received: true });
     }
 
-    const newBalance = creditCoins(userId, parseInt(coins), paymentId);
+    const newBalance = await creditCoins(userId, parseInt(coins), paymentId);
     console.log(`[Shop] Credited ${coins} Hoshi Coins to ${userId} — new balance: ${newBalance}`);
   }
 
